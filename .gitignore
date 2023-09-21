@@ -1,0 +1,7 @@
+.idea/
+__pycache__/
+*.pyc
+*.pyo
+.vscode/
+logs
+Nash_preTrained
