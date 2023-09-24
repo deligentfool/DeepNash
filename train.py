@@ -23,8 +23,8 @@ def train():
     ####### initialize environment hyperparameters ######
     has_continuous_action_space = False  # continuous action space; else discrete
 
-    max_ep_len = 1000                   # max timesteps in one episode
-    max_training_timesteps = int(3e6)   # break training loop if timeteps > max_training_timesteps
+    max_ep_len = 300                   # max timesteps in one episode
+    max_training_timesteps = int(6e6)   # break training loop if timeteps > max_training_timesteps
 
     print_freq = max_ep_len * 10        # print avg reward in the interval (in num timesteps)
     log_freq = max_ep_len * 2           # log avg reward in the interval (in num timesteps)
@@ -38,7 +38,7 @@ def train():
 
     #####################################################
     n = 0
-    delta_m = 100
+    delta_m = 20
     m = 0
 
     ## Note : print/log frequencies should be > than max_ep_len
@@ -46,8 +46,8 @@ def train():
     ################ PPO hyperparameters ################
     update_timestep = max_ep_len * 4      # update policy every n timesteps
 
-    lr_actor = 0.0003       # learning rate for actor network
-    lr_critic = 0.001       # learning rate for critic network
+    lr_actor = 0.0001       # learning rate for actor network
+    lr_critic = 0.0001       # learning rate for critic network
 
     random_seed = 0         # set random seed if required (0 = no random seed)
     #####################################################
@@ -181,7 +181,7 @@ def train():
             p1_action = nash_agent.select_action(state[0], 0)
             p2_action = nash_agent.select_action(state[1], 1)
             actions = {"1": p1_action, "2": p2_action}
-            state, reward, done, _ = env.step(actions)
+            state, reward, done, _, _ = env.step(actions)
 
             # saving reward and is_terminals
             nash_agent.buffer[0].rewards[-1].append(reward[0] - reward[1])
@@ -222,6 +222,7 @@ def train():
                 print("Episode : {} \t\t Timestep : {} \t\t Average Reward : {} \t\t Nash Reward : {}".format(i_episode, time_step, print_avg_reward, print_avg_nash_reward))
 
                 print_running_reward = 0
+                print_nash_running_reward = 0
                 print_running_episodes = 0
 
             # save model weights
@@ -231,6 +232,7 @@ def train():
                 nash_agent.save(checkpoint_path)
                 print("model saved")
                 print("Elapsed Time  : ", datetime.now().replace(microsecond=0) - start_time)
+                print("M: {}".format(m))
                 print("--------------------------------------------------------------------------------------------")
 
             # break; if the episode is over

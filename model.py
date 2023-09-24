@@ -88,22 +88,18 @@ class ActorCritic(nn.Module):
         else:
             self.actor = nn.Sequential(
                             conv_net(self.state_dim),
-                            nn.Tanh(),
-                            nn.Linear(self.conv_dim(), 64),
-                            nn.Tanh(),
-                            nn.Linear(64, 64),
-                            nn.Tanh(),
-                            nn.Linear(64, action_dim),
+                            nn.ReLU(),
+                            nn.Linear(self.conv_dim(), 32),
+                            nn.ReLU(),
+                            nn.Linear(32, action_dim),
                         )
         # critic
         self.critic = nn.Sequential(
                         conv_net(self.state_dim),
-                        nn.Tanh(),
-                        nn.Linear(self.conv_dim(), 64),
-                        nn.Tanh(),
-                        nn.Linear(64, 64),
-                        nn.Tanh(),
-                        nn.Linear(64, 1)
+                        nn.ReLU(),
+                        nn.Linear(self.conv_dim(), 32),
+                        nn.ReLU(),
+                        nn.Linear(32, 1)
                     )
 
     def set_action_std(self, new_action_std):
@@ -196,7 +192,6 @@ class Nash:
         self.policy_reg_old = ActorCritic(state_dim, action_dim, has_continuous_action_space, action_std_init).to(device)
         self.policy_reg_old.load_state_dict(self.policy.state_dict())
 
-        self.MseLoss = nn.MSELoss()
         self.action_dim = action_dim
 
     def set_action_std(self, new_action_std):
@@ -225,28 +220,30 @@ class Nash:
             print("WARNING : Calling Nash::decay_action_std() on discrete action space policy")
         print("--------------------------------------------------------------------------------------------")
 
-    def select_action(self, state, id):
+    def select_action(self, state, id, test=False):
         state = np.expand_dims(state, 0)
         if self.has_continuous_action_space:
             with torch.no_grad():
                 state = torch.FloatTensor(state).to(device)
                 action, action_logprob, state_val = self.policy.act(state)
 
-            self.buffer[id].states[-1].append(state)
-            self.buffer[id].actions[-1].append(action)
-            self.buffer[id].logprobs[-1].append(action_logprob)
-            self.buffer[id].state_values[-1].append(state_val)
+            if test == False:
+                self.buffer[id].states[-1].append(state)
+                self.buffer[id].actions[-1].append(action)
+                self.buffer[id].logprobs[-1].append(action_logprob)
+                self.buffer[id].state_values[-1].append(state_val)
 
             return action.detach().cpu().numpy().flatten()
         else:
             with torch.no_grad():
                 state = torch.FloatTensor(state).to(device)
-                action, action_logprob, state_val = self.policy_old.act(state)
+                action, action_logprob, state_val = self.policy.act(state)
 
-            self.buffer[id].states[-1].append(state)
-            self.buffer[id].actions[-1].append(action)
-            self.buffer[id].logprobs[-1].append(action_logprob)
-            self.buffer[id].state_values[-1].append(state_val)
+            if test == False:
+                self.buffer[id].states[-1].append(state)
+                self.buffer[id].actions[-1].append(action)
+                self.buffer[id].logprobs[-1].append(action_logprob)
+                self.buffer[id].state_values[-1].append(state_val)
 
             return action.item()
 
@@ -265,15 +262,15 @@ class Nash:
             rewards.append(torch.FloatTensor(self.buffer[0].rewards[t]))
 
         seq_len = len(old_states[0])
-        old_states = torch.cat(old_states, dim=1)
-        old_states = old_states.view(seq_len * 2, len(self.buffer[0].states), * old_states.size()[2:])
-        old_actions = torch.cat(old_actions, dim=1)
-        old_actions = old_actions.view(seq_len * 2, len(self.buffer[0].states), * old_actions.size()[2:])
+        old_states = torch.stack(old_states, dim=2)
+        old_states = old_states.view(seq_len * 2, * old_states.size()[2:])
+        old_actions = torch.stack(old_actions, dim=2)
+        old_actions = old_actions.view(seq_len * 2, * old_actions.size()[2:])
         old_actions_oh = F.one_hot(old_actions, 10)
-        old_logprobs = torch.cat(old_logprobs, dim=1)
-        old_logprobs = old_logprobs.view(seq_len * 2, len(self.buffer[0].states), * old_logprobs.size()[2:])
-        old_state_values = torch.cat(old_state_values, dim=1)
-        old_state_values = old_state_values.view(seq_len * 2, len(self.buffer[0].states), * old_state_values.size()[2:])
+        old_logprobs = torch.stack(old_logprobs, dim=2)
+        old_logprobs = old_logprobs.view(seq_len * 2, * old_logprobs.size()[2:])
+        old_state_values = torch.stack(old_state_values, dim=2)
+        old_state_values = old_state_values.view(seq_len * 2, * old_state_values.size()[2:])
         rewards = torch.stack(rewards, dim=1)
         rewards = rewards.view(seq_len, len(self.buffer[0].states), * rewards.size()[2:]).to(old_states.device)
         player_id = torch.ones(seq_len * 2, len(self.buffer[0].states)).to(old_states.device)
@@ -293,30 +290,30 @@ class Nash:
             log_policy_reg = log_pi - (alpha * log_pi_reg + (1 - alpha) * log_pi_reg_old)
 
         for player in range(2):
-                reward = rewards * ((-1) ** (player + 1))
-                reward = reward.repeat([1, 2]).view(seq_len * 2, -1)
-                reward = reward * (1 - player_id)
-                v_target_, has_played, policy_target_ = vtrace.v_trace(
-                    state_v_old,
-                    valid,
-                    player_id,
-                    torch.exp(old_logprobs),
-                    pi_processed,
-                    log_policy_reg,
-                    vtrace._player_others(player_id, valid, player),
-                    old_actions_oh,
-                    reward,
-                    player,
-                    lambda_=1.0,
-                    c=self.c_bar,
-                    rho=self.roh_bar,
-                    eta=self.eta,
-                    gamma=self.vtrace_gamma,
-                )
+            reward = rewards * ((-1) ** player)
+            reward = reward.repeat([1, 2]).view(seq_len * 2, -1)
+            reward = reward * (1 - player_id)
+            v_target_, has_played, policy_target_ = vtrace.v_trace(
+                state_v_old,
+                valid,
+                player_id,
+                torch.exp(old_logprobs),
+                pi_processed,
+                log_policy_reg,
+                vtrace._player_others(player_id, valid, player),
+                old_actions_oh,
+                reward,
+                player,
+                lambda_=1.0,
+                c=self.c_bar,
+                rho=self.roh_bar,
+                eta=self.eta,
+                gamma=self.vtrace_gamma,
+            )
 
-                v_target_list.append(v_target_)
-                has_played_list.append(has_played)
-                v_trace_policy_target_list.append(policy_target_)
+            v_target_list.append(v_target_)
+            has_played_list.append(has_played)
+            v_trace_policy_target_list.append(policy_target_)
         loss_v = vtrace.get_loss_v([state_v] * 2, v_target_list, has_played_list)
 
         is_vector = torch.unsqueeze(torch.ones_like(valid), dim=-1)
