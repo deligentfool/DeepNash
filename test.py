@@ -5,12 +5,13 @@ from datetime import datetime
 
 import torch
 import numpy as np
+import time
 
 from model import Nash
 from wrapper import env_wrap
 import gym
 import lasertag
-from opponent import RandomAgent
+from opponent import RandomAgent, NeuralAgent
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -19,7 +20,7 @@ warnings.filterwarnings("ignore")
 def test():
     print("============================================================================================")
 
-    env_name = 'LaserTag-small2-v0'
+    env_name = 'LaserTag-small3-v0'
     has_continuous_action_space = False
     max_ep_len = 1000           # max timesteps in one episode
     action_std = 0.1            # set same std for action distribution which was used while saving
@@ -48,7 +49,9 @@ def test():
 
     # initialize a Nash agent
     nash_agent = Nash(state_dim, action_dim, lr_actor, lr_critic, has_continuous_action_space, action_std)
-    opponent_agent = RandomAgent(state_dim, action_dim)
+    # opponent_agent = RandomAgent(state_dim, action_dim)
+    opponent_agent = NeuralAgent(state_dim, action_dim)
+    opponent_agent.load('./dqn_policy.pth')
 
     # preTrained weights directory
 
@@ -83,6 +86,7 @@ def test():
             reward_2 += reward[1]
 
             if render:
+                # time.sleep(0.1)
                 env.render()
                 time.sleep(frame_delay)
 

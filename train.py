@@ -10,21 +10,24 @@ from model import Nash
 from wrapper import env_wrap
 import gym
 import lasertag
+from envs.nim import NIM
 import warnings
+import random
 warnings.filterwarnings("ignore")
 
 
 ################################### Training ###################################
 def train():
 
-    env_name = 'LaserTag-small2-v0'
+    # env_name = 'LaserTag-small2-v0'
+    env_name = 'NIM-5'
     print("============================================================================================")
 
     ####### initialize environment hyperparameters ######
     has_continuous_action_space = False  # continuous action space; else discrete
 
-    max_ep_len = 300                   # max timesteps in one episode
-    max_training_timesteps = int(6e6)   # break training loop if timeteps > max_training_timesteps
+    max_ep_len = 30                   # max timesteps in one episode
+    max_training_timesteps = int(6e7)   # break training loop if timeteps > max_training_timesteps
 
     print_freq = max_ep_len * 10        # print avg reward in the interval (in num timesteps)
     log_freq = max_ep_len * 2           # log avg reward in the interval (in num timesteps)
@@ -34,6 +37,9 @@ def train():
     action_std_decay_rate = 0.05        # linearly decay action_std (action_std = action_std - action_std_decay_rate)
     min_action_std = 0.1                # minimum action_std (stop decay after action_std <= min_action_std)
     action_std_decay_freq = int(2.5e5)  # action_std decay frequency (in num timesteps)
+    eval_num = 25
+    last_save_model_step = 0
+    max_win_ratio = 0
     #####################################################
 
     #####################################################
@@ -54,17 +60,23 @@ def train():
 
     print("training environment name : " + env_name)
 
-    env = gym.make(env_name)
-    env = env_wrap(env)
+    if "LaserTag" in env_name:
+        env = gym.make(env_name)
+        env = env_wrap(env)
 
-    # state space dimension
-    state_dim = env.observation_space.shape
+        # state space dimension
+        state_dim = env.observation_space.shape
 
-    # action space dimension
-    if has_continuous_action_space:
-        action_dim = env.action_space.shape[0]
-    else:
-        action_dim = env.action_space.n
+        # action space dimension
+        if has_continuous_action_space:
+            action_dim = env.action_space.shape[0]
+        else:
+            action_dim = env.action_space.n
+    elif "NIM" in env_name:
+        level = int(env_name[4:])
+        env = NIM(level)
+        state_dim = env.state_dim
+        action_dim = env.action_dim
 
     ###################### logging ######################
 
@@ -144,7 +156,10 @@ def train():
     ################# training procedure ################
 
     # initialize a PPO agent
-    nash_agent = Nash(state_dim, action_dim, lr_actor, lr_critic, has_continuous_action_space, action_std)
+    if "LaserTag" in env_name:
+        nash_agent = Nash(state_dim, action_dim, lr_actor, lr_critic, has_continuous_action_space, action_std)
+    elif "NIM" in  env_name:
+        nash_agent = Nash(state_dim, action_dim, lr_actor, lr_critic, has_continuous_action_space, action_std, flatten=True)
 
     # track total training time
     start_time = datetime.now().replace(microsecond=0)
@@ -177,21 +192,38 @@ def train():
 
         for t in range(1, max_ep_len+1):
 
-            # select action with policy
-            p1_action = nash_agent.select_action(state[0], 0)
-            p2_action = nash_agent.select_action(state[1], 1)
-            actions = {"1": p1_action, "2": p2_action}
-            state, reward, done, _, _ = env.step(actions)
+            if "LaserTag" in env_name:
+                # select action with policy
+                p1_action = nash_agent.select_action(state[0], 0)
+                p2_action = nash_agent.select_action(state[1], 1)
+                actions = {"1": p1_action, "2": p2_action}
+                state, reward, done, _, _ = env.step(actions)
 
-            # saving reward and is_terminals
-            nash_agent.buffer[0].rewards[-1].append(reward[0] - reward[1])
-            nash_agent.buffer[1].rewards[-1].append(reward[1] - reward[0])
-            nash_agent.buffer[0].is_terminals[-1].append(done)
-            nash_agent.buffer[1].is_terminals[-1].append(done)
+                # saving reward and is_terminals
+                nash_agent.buffer[0].rewards[-1].append(reward[0] - reward[1])
+                nash_agent.buffer[1].rewards[-1].append(reward[1] - reward[0])
+                nash_agent.buffer[0].is_terminals[-1].append(done)
+                nash_agent.buffer[1].is_terminals[-1].append(done)
 
-            time_step +=1
-            current_ep_reward += np.sum(reward)
-            current_nash_ep_reward += (reward[0] - reward[1])
+                time_step +=1
+                current_ep_reward += np.sum(reward)
+                current_nash_ep_reward += (reward[0] - reward[1])
+            elif "NIM" in env_name:
+                rewards = []
+                for i in range(2):
+                    avail_actions = env.get_onehot_available_actions()
+                    action = nash_agent.select_action(state, i, avail_actions)
+                    state, reward, done, _, _ = env.step(action)
+                    rewards.append(reward)
+                    nash_agent.buffer[i].rewards[-1].append(reward)
+                    nash_agent.buffer[i].is_terminals[-1].append(done)
+
+                time_step +=1
+                current_ep_reward += np.abs(rewards[0] + rewards[1])
+                if rewards[0] != 0:
+                    current_nash_ep_reward = current_nash_ep_reward + rewards[0]
+                else:
+                    current_nash_ep_reward = current_nash_ep_reward - rewards[1]
 
             # if continuous action space; then decay action std of ouput action distribution
             if has_continuous_action_space and time_step % action_std_decay_freq == 0:
@@ -225,18 +257,51 @@ def train():
                 print_nash_running_reward = 0
                 print_running_episodes = 0
 
-            # save model weights
-            if time_step % save_model_freq == 0:
-                print("--------------------------------------------------------------------------------------------")
-                print("saving model at : " + checkpoint_path)
-                nash_agent.save(checkpoint_path)
-                print("model saved")
-                print("Elapsed Time  : ", datetime.now().replace(microsecond=0) - start_time)
-                print("M: {}".format(m))
-                print("--------------------------------------------------------------------------------------------")
+
 
             # break; if the episode is over
             if done:
+                if "NIM" in env_name:
+                    nash_agent.buffer[0].is_terminals[-1][-1] = True
+                    nash_agent.buffer[1].is_terminals[-1][-1] = True
+                    if nash_agent.buffer[1].rewards[-1][-1] > 0:
+                        nash_agent.buffer[0].rewards[-1][-1] = -nash_agent.buffer[1].rewards[-1][-1]
+                    else:
+                        nash_agent.buffer[1].rewards[-1][-1] = -nash_agent.buffer[0].rewards[-1][-1]
+                # save model weights
+                if time_step - last_save_model_step > save_model_freq:
+                    if eval_num > 0:
+                        win_count = 0
+                        for _ in range(eval_num):
+                            e_state, e_info = env.reset()
+                            e_done = False
+                            while not e_done:
+                                e_rewards = []
+                                for i in range(2):
+                                    if level % 2 == i:
+                                        e_avail_actions = env.get_onehot_available_actions()
+                                        e_action = nash_agent.select_action(e_state, i, e_avail_actions, True)
+                                    else:
+                                        e_avail_actions = env.get_available_actions()
+                                        e_action = random.choice(e_avail_actions)
+                                    e_state, e_reward, e_done, _, _ = env.step(e_action)
+                                    if level % 2 == i:
+                                        e_rewards.append(e_reward)
+                            if e_rewards[-1] > 0:
+                                win_count += 1
+                        test_win_ratio = win_count / eval_num
+                        max_win_ratio = max(max_win_ratio, test_win_ratio)
+                    print("--------------------------------------------------------------------------------------------")
+                    print("saving model at : " + checkpoint_path)
+                    if eval_num == 0 or test_win_ratio == max_win_ratio:
+                        nash_agent.save(checkpoint_path[:-4] + "_" + str(max_win_ratio) + checkpoint_path[-4:])
+                    print("model saved")
+                    print("Elapsed Time  : ", datetime.now().replace(microsecond=0) - start_time)
+                    print("M: {}".format(m))
+                    if eval_num > 0:
+                        print("Test win ratio: ", test_win_ratio)
+                    print("--------------------------------------------------------------------------------------------")
+                    last_save_model_step = time_step
                 break
         # update PPO agent
         if time_step % update_timestep == 0:
