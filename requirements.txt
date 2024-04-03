@@ -1,0 +1,17 @@
+cloudpickle==2.2.1
+gym==0.26.2
+gym-notices==0.0.8
+importlib-metadata==6.8.0
+lasertag==1.0.0
+numpy==1.24.4
+Pillow==10.0.1
+pip==23.2.1
+pycolab==1.2
+setuptools==68.0.0
+six==1.16.0
+torch==1.8.1+cu111
+torchaudio==0.8.1
+torchvision==0.9.1+cu111
+typing_extensions==4.8.0
+wheel==0.38.4
+zipp==3.17.0
