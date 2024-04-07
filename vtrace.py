@@ -66,7 +66,7 @@ def _player_others(
     current_player_tensor = player_ids == player
 
     res = 2 * current_player_tensor - 1
-    res = res * valid
+    res = res * valid.to(res.device)
     return torch.unsqueeze(res, dim=-1)
 
 
@@ -91,7 +91,7 @@ def _where(
             p = torch.reshape(
                 pred, pred.shape + (1,) * (len(t.shape) - len(pred.shape))
             ).to(torch.bool)
-            return torch.where(p, t, f)
+            return torch.where(p.to(t.device), t, f)
 
     output = [_where_one(td, fd) for td, fd in zip(true_data, false_data)]
     return output
@@ -177,6 +177,7 @@ def _policy_ratio(
       as pi, mu or actions_oh but without the last dimension A.
     """
     assert pi.shape == mu.shape == actions_oh.shape
+    valid = valid.to(actions_oh.device)
     # assert ((valid,), actions_oh.shape[:-1])
 
     def _select_action_prob(pi: torch.Tensor) -> torch.Tensor:
@@ -396,7 +397,7 @@ def get_loss_nerd(
         assert logit_pi.shape[0] == q_vr.shape[0]
         # loss policy
         adv_pi = q_vr - torch.sum(pi * q_vr, dim=-1, keepdim=True)
-        adv_pi = is_c * adv_pi  # importance sampling correction
+        adv_pi = is_c.to(adv_pi.device) * adv_pi  # importance sampling correction
         adv_pi = torch.clip(adv_pi, min=-clip, max=clip)
         adv_pi = adv_pi.detach()
 
@@ -409,6 +410,6 @@ def get_loss_nerd(
             * apply_force_with_threshold(logits, adv_pi, threshold, threshold_center),
             axis=-1,
         )
-        nerd_loss = -renormalize(nerd_loss, valid * (player_ids == k))
+        nerd_loss = -renormalize(nerd_loss, valid.to(player_ids.device) * (player_ids == k))
         loss_pi_list.append(nerd_loss)
     return sum(loss_pi_list)

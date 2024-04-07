@@ -175,7 +175,7 @@ class ActorCritic(nn.Module):
             action_logits = self.actor(state.flatten(0, 1))
             action_logits = action_logits.view(seq_len, batch_size, -1)
             if available_actions is not None:
-                action_logits = torch.where(available_actions == 1, action_logits, torch.tensor(-1e8))
+                action_logits = torch.where(available_actions == 1, action_logits, torch.tensor(-1e8).to(action_logits.device))
             dist = Categorical(logits=action_logits)
             action_probs = dist.probs
         action_logprobs = torch.log_softmax(action_logits, dim=-1)

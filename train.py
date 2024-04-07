@@ -19,8 +19,8 @@ warnings.filterwarnings("ignore")
 ################################### Training ###################################
 def train():
 
-    # env_name = 'LaserTag-small2-v0'
-    env_name = 'NIM-5'
+    env_name = 'LaserTag-small2-v0'
+    # env_name = 'NIM-5'
     print("============================================================================================")
 
     ####### initialize environment hyperparameters ######

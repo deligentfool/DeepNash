@@ -1,0 +1,8 @@
+README.md
+setup.py
+lasertag/__init__.py
+lasertag.egg-info/PKG-INFO
+lasertag.egg-info/SOURCES.txt
+lasertag.egg-info/dependency_links.txt
+lasertag.egg-info/requires.txt
+lasertag.egg-info/top_level.txt

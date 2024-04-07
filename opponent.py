@@ -34,7 +34,7 @@ class NeuralAgent(object):
         state = np.expand_dims(state, 0)
         with torch.no_grad():
             state = torch.FloatTensor(state)
-            action = self.actor(state)
+            action = self.actor(state).max(dim=-1)[1]
         return action.item()
 
     def load(self, checkpoint_path):

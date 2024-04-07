@@ -8,7 +8,12 @@ This repository implements possible implementations of DeepNash in two scenarios
 
 Lasertag is a zero-sum game where two agents are in a grid environment. Each agent can move and shoot lasers. When a laser hits the opponent, the agent gets a reward, while the hit agent receives the same punishment.
 
-Both agents make decisions simultaneously in this scenario. The Laser_tag gym environment can be found in [younggyoseo/lasertag-v0: Implementation of Deepmind's LaserTag-v0 game in A Unified Game-Theoretic Approach to Multiagent Reinforcement Learning(2017) (github.com)](https://github.com/younggyoseo/lasertag-v0).
+Both agents make decisions simultaneously in this scenario. The Laser_tag gym environment in this repository is modified based on [younggyoseo/lasertag-v0: Implementation of Deepmind's LaserTag-v0 game in A Unified Game-Theoretic Approach to Multiagent Reinforcement Learning(2017) (github.com)](https://github.com/younggyoseo/lasertag-v0). Use the following code to install it.
+
+```shell
+cd lasertag-v0
+pip install -e .
+```
 
 ![image](https://github.com/deligentfool/DeepNash/blob/master/resource/Lasertag.gif)
 

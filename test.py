@@ -49,9 +49,11 @@ def test():
 
     # initialize a Nash agent
     nash_agent = Nash(state_dim, action_dim, lr_actor, lr_critic, has_continuous_action_space, action_std)
-    # opponent_agent = RandomAgent(state_dim, action_dim)
-    opponent_agent = NeuralAgent(state_dim, action_dim)
-    opponent_agent.load('./dqn_policy.pth')
+    # choose a random opponent agent
+    opponent_agent = RandomAgent(state_dim, action_dim)
+    # or a neural network based opponent agent
+    # opponent_agent = NeuralAgent(state_dim, action_dim)
+    # opponent_agent.load('./nn_policy.pth')
 
     # preTrained weights directory
 
@@ -77,7 +79,7 @@ def test():
         state, info = env.reset()
 
         for t in range(1, max_ep_len+1):
-            p1_action = nash_agent.select_action(state[0], 0, True)
+            p1_action = nash_agent.select_action(state[0], 0, test=True)
             p2_action = opponent_agent.select_action(state[1])
             actions = {"1": p1_action, "2": p2_action}
             state, reward, done, _, _ = env.step(actions)
